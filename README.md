@@ -4,14 +4,15 @@ Hi everyone! I am Bang (nickname: BangGaming8826). I am a 5th-grade student and 
 
 ## 🌟 Current Features of Mini-UIA:
 - **Long Mode**: Successfully booting into 64-bit mode;
-- **Memory Management**: Physical Memory Manager (PMM) using a Bitmap algorithm;
+- **Memory Management (-- PMM --)**: Physical Memory Manager (PMM) using a Bitmap algorithm;
+- **Memory Management (-- VMM --)**: Virtual Memory Manager (VMM) and Radix Tree;
 - **Interrupts**: Configured IDT (Interrupt Descriptor Table);
 - **Timer**: Local APIC Timer handling periodic interrupts perfectly;
 - **Process/Scheduler**:  Manage Processes, Scheduler && Context Switching
 - **Keyboard Support**: PS/2 Keyboard IRQ1 driver is up and running via port `0x60`!
 
 ## 🛠️ Tech Stack & Environment:
-- **Code Editor/Environment**: Coded on a Huawei tablet using SwiftKey keyboard;
+- **Code Editor/Environment**: Coded on a Huawei Mediapad T5 -> Termux -> Neovim;
 - **Languages**: C and Assembly;
 
 ## 🤝 Open for Collaboration!
