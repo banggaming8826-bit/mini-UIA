@@ -10,8 +10,7 @@ Hi everyone! I am Bang (nickname: BangGaming8826). I am a 5th-grade student and 
 - **Timer**: Local APIC Timer handling periodic interrupts perfectly;
 - **Process/Scheduler && Scheduler**:  Manage Processes, Scheduler && Context Switching;
 - **Keyboard Support**: PS/2 Keyboard IRQ1 driver is up and running via IO port `0x60`!
-- **IPC**:  Complete multi-tasking core capable of managing independent Processes,
-						Context Switching, and Task Scheduling;
+- **IPC**:  Complete multi-tasking core capable of managing independent Processes, Context Switching, and Task Scheduling;
 
 ## 🛠️ Tech Stack & Environment:
 - **Code Editor/Environment**: Coded on a Huawei Mediapad T5 -> Termux -> Neovim;
