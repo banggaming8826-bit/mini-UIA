@@ -16,8 +16,8 @@ Hi everyone! I am Bang (nickname: BangGaming8826). I am a 5th-grade student and 
 - **Languages**: C and Assembly;
 
 ## (?) How to build?
-=> Run `runner.sh` (bash scripts) to build (and run QEMU)
-(i) Request to run: NASM, Clang/GCC Cross Compiler (x86_64), QEMU (qemu-system-x86_64)
+=> Run `runner.sh` (bash scripts) to build (auto run QEMU)
+(i) Request: NASM, Clang/GCC Cross Compiler (x86_64), QEMU (qemu-system-x86_64)
 
 ## 🤝 Open for Collaboration!
 Mini-UIA is a stepping stone towards my big dream of building a powerful OS for the future. I would be incredibly grateful for any advice, code reviews, or Pull Requests from senior developers worldwide to help me expand driver support (mouse, storage, network) and improve the kernel. 
