@@ -26,6 +26,7 @@ typedef __builtin_va_list 	va_list;
 #define PROCESS_RUN				(0)
 #define PROCESS_READY				(1)
 #define PROCESS_LOCK				(2)
+#define PROCESS_RECV_BLOCKED			(3)
 #define PROCESS_MAXCO				(16) /* ko thuc process::status */
 #define va_start(v,l)  			 	__builtin_va_start(v,l)
 #define va_arg(v,l)     			__builtin_va_arg(v,l)
@@ -33,6 +34,8 @@ typedef __builtin_va_list 	va_list;
 #define SYSCALL_EXIT				(0)
 #define SYSCALL_PRINT				(1)
 #define SYSCALL_HPRINT				(2)
+#define SYSCALL_SEND				(3)
+#define SYSCALL_RECV				(4)
 #define MSR_EFER				0xC0000080
 #define MSR_STAR				0xC0000081
 #define MSR_LSTAR				0xC0000082

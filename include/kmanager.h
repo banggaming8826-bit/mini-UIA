@@ -2,9 +2,11 @@
 #define __KMANAGER__
 #include "kdefine.h"
 
-short* 	vga_buffer = (short*)0xB8000;
-int	vga_index  = 0;
-uint64b total_byteram = 0;
+short* 	vga_buffer 		= (short*)0xB8000;
+int	vga_index  		= 0;
+uint64b total_byteram 		= 0;
+uint64b syscall_kstack 		= 0;
+uint64b syscall_ursp		= 0;
 
 // "extern struct"
 struct tss_struct
@@ -40,7 +42,7 @@ static inline uint8b kreadio(uint16b p) {
 static inline uint64b krdmsr(uint32b m) {
 	uint32b low, high;
 	asm volatile("rdmsr" : "=a"(low), "=d"(high) : "c"(m));
-	return ((uint64b)high << 32);
+	return ((uint64b)high << 32) | low;
 }
 static inline void kwrmsr(uint32b m, uint64b v) {
 	uint32b low = (uint32b)v, high = (uint32b)(v >> 32);
@@ -346,6 +348,14 @@ kstatus_t vmm_switch_space(uint64b* page) {
 
 // Process && Managers
 //A. Cau truc
+
+struct messenge_struct
+{
+	uint64b senderid;
+	uint64b type;
+	uint64b data1;
+	uint64b data2;
+} __attribute__((packed));
 struct process_struct
 {
 	uint64b pid;
@@ -353,7 +363,13 @@ struct process_struct
 	kstatus_t status;
 	const char* pname;
 	uint64b rsp, rip, kstack;
+	// thu cua tien trinh...
+	struct messenge_struct mailbox; // Hom thu
+	kstatus_t has_mess;		// Da co thu chua
+	struct messenge_struct* msgbuf; // Ko dc! ...
 };
+
+//B. Method && global::var
 kstatus_t	process_run(struct process_struct*);
 void 		process_end(void); // hock ... VVV
 __attribute__((naked)) void process_start_init(void) 
@@ -419,15 +435,17 @@ struct process_struct* process_init(const char* name, uint64b id, void* function
 	*(--rsp) = (uint64b)process_end;
 	uint64b ursp = (uint64b)rsp;
 
-	*(--rsp) = 0x23;
+	*(--rsp) = 0x1B;
 	*(--rsp) = ursp;
 	*(--rsp) = 0x202;
-	*(--rsp) = 0x1B;
+	*(--rsp) = 0x23;
 	*(--rsp) = (uint64b)function;
 	for (int __ = 0; __ < 15; __++) { *(--rsp) = 0; }
 	*(--rsp) = (uint64b)process_start_init;
 	for (int __ = 0; __ < 6; __++) { *(--rsp) = 0; }
 	p->rsp = (uint64b)(rsp);
+	p->has_mess = 0;
+	p->msgbuf = NULL;
 
 	return p;
 }
@@ -443,6 +461,7 @@ kstatus_t process_run(struct process_struct* p)
 	if (!p) { return KSTATUS_ERR; }
 	process_curr = p;
 	tss_var.rsp0 = p->kstack;
+	syscall_kstack = p->kstack;
 
 	vmm_switch_space(p->p4_ptr);
 	uint64b rac;
@@ -499,9 +518,60 @@ void process_schrun(void)
 
 	process_currin = i;
 	process_curr = process_queue[process_currin];
+
 	tss_var.rsp0 = process_curr->kstack;
+	syscall_kstack = process_curr->kstack;
+
 	vmm_switch_space(process_curr->p4_ptr);
 	process_switch(&(ptr->rsp), process_curr->rsp);
+}
+struct process_struct* process_getbyid(uint64b pid) 
+{
+	for (size_t i = 0; i < process_num; i++) {
+		if (process_queue[i]->pid == pid) { return process_queue[i]; }
+	}
+	return NULL;
+}
+kstatus_t sysipc_send(uint64b pid_dich, uint64b type, uint64b data1, uint64b data2) 
+{
+	struct process_struct* pdich = process_getbyid(pid_dich);
+	if (!pdich || pdich->has_mess) { return KSTATUS_ERR; }
+	pdich->mailbox.senderid = process_curr->pid,
+	pdich->mailbox.type 	= type,
+	pdich->mailbox.data1	= data1,
+	pdich->mailbox.data2	= data2,
+	pdich->has_mess		= 1;
+	if (pdich->status == PROCESS_RECV_BLOCKED) {
+		// ko dc luoi bieng
+		pdich->status = PROCESS_READY;
+	}
+	return KSTATUS_OK;
+}
+kstatus_t sysipc_recv(struct messenge_struct* m)
+{
+	if (!m) { return KSTATUS_ERR; }
+	if (process_curr->has_mess)
+	{
+		m->senderid		= process_curr->mailbox.senderid;
+		m->type			= process_curr->mailbox.type;
+		m->data1		= process_curr->mailbox.data1;
+		m->data2		= process_curr->mailbox.data2;
+		process_curr->has_mess 	= 0;
+	}
+	else {
+		process_curr->status = PROCESS_RECV_BLOCKED;
+		process_curr->msgbuf = m;
+		process_schrun();
+		if (process_curr->has_mess) 
+		{
+			m->senderid		= process_curr->mailbox.senderid;
+			m->type			= process_curr->mailbox.type;
+			m->data1		= process_curr->mailbox.data1;
+			m->data2		= process_curr->mailbox.data2;
+			process_curr->has_mess 	= 0;
+		}
+	}
+	return KSTATUS_OK;
 }
 
 #endif // __KMANAGER__ // 

@@ -344,6 +344,10 @@ isr_syscall:
 	pop rsi;
 	pop rdi;
 	iretq;
+; syscall
+; TODO []: build to use syscall command (int 0x80 -> syscall)
+; ...work here...
+
 ; IRQ
 extern process_curr;
 extern process_schrun;

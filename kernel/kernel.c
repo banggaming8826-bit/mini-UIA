@@ -94,6 +94,19 @@ void isr_syscall_xl(int sysnum, ...)
 			kprint_hex(x, 0x0F);
 			break;
 		}
+		case SYSCALL_SEND: {
+			sysipc_send(
+				va_arg(va, uint64b),
+				va_arg(va, uint64b),
+				va_arg(va, uint64b),
+				va_arg(va, uint64b)
+			);
+			break;
+		}
+		case SYSCALL_RECV: {
+			sysipc_recv(va_arg(va, struct messenge_struct*));
+			break;
+		}
 	}
 }
 static const char keyboard_table[128] = (const char[128])
@@ -153,8 +166,8 @@ struct gdtpack_struct
 	struct gdt_struct null,
 			  kcode,
 			  kdata,
-			  ucode,
-			  udata;
+			  udata,
+			  ucode;
 	struct gdt_tss_struct tss;
 } __attribute__((packed));
 struct gdtptr_struct {
@@ -194,13 +207,13 @@ void gdt_tss_setup(void)
 			0, 0, 0,
 			0x92, 0x00, 0 // 0x00=0
 		},
-		.ucode = {
-			0, 0, 0,
-			0xFA, 0x20, 0
-		},
 		.udata = {
 			0, 0, 0,
 			0xF2, 0x00, 0 // 0x00=0
+		},
+		.ucode = {
+			0, 0, 0,
+			0xFA, 0x20, 0
 		},
 		.tss = (struct gdt_tss_struct)
 		{
@@ -246,10 +259,10 @@ void what(void)
 			"\tmov $1, %%rax\n"
 			"\tmov %0, %%rsi\n"
 			"\tint $0x80\n"
-			: : "r"("a") : "rax", "rsi"
+			: : "r"("[]") : "rax", "rsi"
 		);
 		// Syscall Strom = 0
-		for (int i = 0; i <= 900000; i++) { asm volatile("nop"); }
+		for (int i = 0; i <= (900000ULL); i++) { asm volatile("nop"); }
 	}
 }
 void who(void)
@@ -260,10 +273,10 @@ void who(void)
 			"\tmov $1, %%rax\n"
 			"\tmov %0, %%rsi\n"
 			"\tint $0x80\n"
-			: : "r"("b") : "rax", "rsi"
+			: : "r"("#") : "rax", "rsi"
 		);
 		// Syscall Strom = 0
-		for (int i = 0; i <= 900000; i++) { asm volatile("nop"); }
+		for (int i = 0; i <= (900000ULL); i++) { asm volatile("nop"); }
 	}
 }
 

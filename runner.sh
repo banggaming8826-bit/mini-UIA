@@ -18,4 +18,4 @@ dd if=/dev/zero of=bin/mini_uia.img bs=512 count=2880 &&
 dd if=bin/kernel.elf of=bin/mini_uia.img conv=notrunc &&
 
 # 5. Khởi động QEMU hưởng thức thành quả
-exec qemu-system-x86_64 -snapshot -drive format=raw,file=bin/mini_uia.img -display curses -cpu qemu64,+sse,+sse2 -d int -D exec.txt
+exec qemu-system-x86_64 -snapshot -drive format=raw,file=bin/mini_uia.img -display curses -cpu qemu64,+sse,+sse2
