@@ -20,7 +20,7 @@ Hi everyone! I am Bang (nickname: BangGaming8826). I am a 5th-grade student and 
 ## (?) How to build?
 - => Run `runner.sh` (bash scripts) to build (auto run QEMU);
 - => Command to run:
-`chmod +777 runner.sh`;
+`chmod +x runner.sh`;
 `./runner.sh`;
 - (i) Request: NASM, Clang/GCC Cross Compiler (x86_64), QEMU (qemu-system-x86_64);
 
