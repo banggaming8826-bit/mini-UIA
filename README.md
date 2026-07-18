@@ -10,17 +10,16 @@ Hi everyone! I am Bang (nickname: BangGaming8826). I am a 5th-grade student and 
 - **Timer**: Local APIC Timer handling periodic interrupts perfectly;
 - **Process/Scheduler && Scheduler**:  Manage Processes, Scheduler && Context Switching;
 - **Keyboard Support**: PS/2 Keyboard IRQ1 driver is up and running via IO port `0x60`!
+- **Filesystem (SATA/AHCI)**: Completed Read sector (`ahci_read()`), HBA Controller, Command List, PRDT
 - **IPC**:  Complete multi-tasking core capable of managing independent Processes, Context Switching, and Task Scheduling;
 
 ## 🛠️ Tech Stack & Environment:
 - **Code Editor/Environment**: Coded on a Huawei Mediapad T5 -> Termux -> Neovim;
-- **Languages**: C and Assembly;
+- **Languages**: C and Assembly (x86_64, Intel/NASM syntax);
 
-## (?) How to build?
+## (*?) How to build?
 - => Run `runner.sh` (bash scripts) to build (auto run QEMU);
-- => Command to run:
-`chmod +x runner.sh`;
-`./runner.sh`;
+- => Command to run: `chmod +x runner.sh && ./runner.sh`;
 - (i) Request: NASM, Clang/GCC Cross Compiler (x86_64), QEMU (qemu-system-x86_64);
 
 ## 🤝 Open for Collaboration!
