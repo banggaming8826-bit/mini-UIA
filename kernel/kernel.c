@@ -20,6 +20,7 @@ struct idt_ptrs {
 struct idt_struct idt[256];
 struct idt_ptrs idt_ptr;
 
+// a. isr
 extern void isr_divbyzero(void);
 extern void isr_deb_breakpoint(void);
 extern void isr_overflow(void);
@@ -35,6 +36,9 @@ extern void isr_pgfault(void);
 extern void isr_timer(void);
 extern void isr_keyboard(void);
 extern void isr_syscall(void);
+
+// b. isr...
+extern void isr_syscall_fs(void);
 
 void idt_setas(int i, uint64b handler, uint8b attr) 
 {
@@ -72,7 +76,7 @@ void idt_setup(void)
 	asm volatile ("lidt %0" : : "m"(idt_ptr) : "memory");
 }
 // dich vu isr && irq
-void isr_syscall_xl(int sysnum, ...)
+uint64b isr_syscall_xl(int sysnum, ...)
 {
 	va_list va;
 	va_start(va, sysnum);
@@ -107,7 +111,42 @@ void isr_syscall_xl(int sysnum, ...)
 			sysipc_recv(va_arg(va, struct messenge_struct*));
 			break;
 		}
+		case SYSCALL_READIO: {
+			uint16b port = (uint16b)(va_arg(va, uint64b));
+			uint8b* ptrr = va_arg(va, uint8b*);
+			if (ptrr) { *ptrr = kreadio(port); }
+			break;
+		}
+		case SYSCALL_WRITEIO: {
+			uint16b port 	= (uint16b)(va_arg(va, uint64b));
+			uint8b  gt 	= (uint8b )(va_arg(va, uint64b));
+			kwriteio(port, gt);
+			break;
+		}
+		case SYSCALL_MALLOC_PG: {
+			uint64b vaddr = va_arg(va, uint64b);
+			void* paddr = pmm_bitalloc_pg();
+			if (!paddr) { 
+				return (uint64b)(KSTATUS_ERR);
+				break;
+			}
+			vmm_allocvma(
+				NULL, process_curr->p4_ptr,
+				vaddr, (uint64b)paddr,
+				PAGE_PRESENT | PAGE_WRITE | PAGE_USER,
+				"__user_heap__"
+			);
+			return (uint64b)paddr;
+			break;
+		}
+		case SYSCALL_FREE_PG: {
+			uint64b vaddr = va_arg(va, uint64b);
+			vmm_unmappg(NULL, process_curr->p4_ptr, vaddr);
+			break;
+		}
 	}
+	va_end(va);
+	return (uint64b)(KSTATUS_OK);
 }
 static const char keyboard_table[128] = (const char[128])
 {
@@ -259,7 +298,7 @@ void what(void)
 			"\tmov $1, %%rax\n"
 			"\tmov %0, %%rsi\n"
 			"\tint $0x80\n"
-			: : "r"("[]") : "rax", "rsi"
+			: : "r"("^") : "rax", "rsi"
 		);
 		// Syscall Strom = 0
 		for (int i = 0; i <= (900000ULL); i++) { asm volatile("nop"); }
@@ -273,10 +312,10 @@ void who(void)
 			"\tmov $1, %%rax\n"
 			"\tmov %0, %%rsi\n"
 			"\tint $0x80\n"
-			: : "r"("#") : "rax", "rsi"
+			: : "r"("\"") : "rax", "rsi"
 		);
 		// Syscall Strom = 0
-		for (int i = 0; i <= (900000ULL); i++) { asm volatile("nop"); }
+		for (int i = 0; i <= (900000ULL << 2); i++) { asm volatile("nop"); }
 	}
 }
 
@@ -330,6 +369,13 @@ extern void kmain(void)
 			krdlapic(LAPIC_SVR) | 0x100 | 0xFF);
 	kwrlapic(LAPIC_TPR, 0);
 	lapic_timer_init(10000000);
+
+	uint64b sys_efer = krdmsr(MSR_EFER) | 1;
+	kwrmsr(MSR_EFER, sys_efer);
+	uint64b sys_star = (0x10ULL << 48) | (0x08ULL << 32);
+	kwrmsr(MSR_STAR, sys_star);
+	kwrmsr(MSR_LSTAR, (uint64b)isr_syscall_fs);
+	kwrmsr(MSR_SFMASK, 0x200);
 
 	asm volatile("sti");
 	

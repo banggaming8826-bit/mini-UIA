@@ -329,9 +329,12 @@ isr_syscall:
 	push r11;
 
 	; ... ;
+	sub rsp, 8;
 	mov rdi, rax;
 	xor eax, eax;
 	call isr_syscall_xl;
+	add rsp, 8;
+	mov rdi, rax;
 
 	pop r11;
 	pop r10;
@@ -343,10 +346,59 @@ isr_syscall:
 	pop rax;
 	pop rsi;
 	pop rdi;
+
+	mov rax, rdi;
 	iretq;
 ; syscall
-; TODO []: build to use syscall command (int 0x80 -> syscall)
-; ...work here...
+; FIXME []: the `syscall' command failed
+global isr_syscall_fs
+extern process_curr;
+extern syscall_kstack;
+
+isr_syscall_fs:
+	xchg rsp, [rel syscall_kstack];
+
+	push r11;
+	push rcx;
+	push rbp;
+	push rbx;
+	push r12;
+	push r13;
+	push r14;
+	push r15;
+	push rdx;
+	push rsi;
+	push rdi;
+	push rax;
+	push r10;
+	push r9;
+	push r8;
+
+	sub rsp, 8;
+	mov rdi, rax;
+	mov rcx, r10;
+	xor eax, eax;
+	call isr_syscall_xl;
+	add rsp, 8;
+
+	pop r8;
+	pop r9;
+	pop r10;
+	pop rax;
+	pop rdi;
+	pop rsi;
+	pop rdx;
+	pop r15;
+	pop r14;
+	pop r13;
+	pop r12;
+	pop rbx;
+	pop rbp;
+	pop rcx;
+	pop r11;
+	xchg rsp, [rel syscall_kstack];
+
+	sysretq;
 
 ; IRQ
 extern process_curr;

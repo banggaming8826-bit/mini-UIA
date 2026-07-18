@@ -1,12 +1,12 @@
 #ifndef __KMANAGER__
 #define __KMANAGER__
+
 #include "kdefine.h"
 
 short* 	vga_buffer 		= (short*)0xB8000;
 int	vga_index  		= 0;
 uint64b total_byteram 		= 0;
-uint64b syscall_kstack 		= 0;
-uint64b syscall_ursp		= 0;
+uint64b syscall_kstack;
 
 // "extern struct"
 struct tss_struct
@@ -56,6 +56,14 @@ static inline uint32b krdlapic(uint32b thanh_ghi) {
 	volatile uint32b* addr = (volatile uint32b*)(LAPIC_BASE + thanh_ghi);
 	return *addr;
 }
+static inline void kwriteiol(uint16b cong, uint32b gt) {
+	asm volatile("outl %0, %1" : : "a"(gt), "Nd"(cong));
+}
+static inline uint32b kreadiol(uint16b cong) {
+	uint32b ret;
+	asm volatile("inl %w1, %0" : "=a"(ret) : "Nd"(cong));
+	return ret;
+}
 void keoi_lapic(void) { kwrlapic(LAPIC_EOI, 0); }
 
 void kclear(int color) {
@@ -72,6 +80,9 @@ void kprint(const char* mess, int color)
 			vga_index = (vga_index / VGA_WEIGHT + 1) * VGA_WEIGHT; 
 			continue;
 		}
+		else if (vga_index >= VGA_HEIGHT * VGA_WEIGHT) {
+			break;
+		}
 		vga_buffer[vga_index++] = (color << 8) | mess[i];
 	}
 }
@@ -87,8 +98,8 @@ void kprint_hex(unsigned long long x, int color)
 	buffer[29] = '\0';
 	while (x > 0) {
 		i--;
-		buffer[i] = thuvien[x % 16];
-		x /= 16;
+		buffer[i] = thuvien[x & 0xF];
+		x >>= 4;
 	}
 	kprint("0x", color);
 	kprint(&buffer[i], color);
@@ -147,7 +158,7 @@ void* pmm_bitalloc_pg(void) // cap phat trang
 }
 void* pmm_bitalloc_pgs(uint64b ip)
 {
-	if (!ip) { return NULL; }
+	if (!ip || ip > pmm_bitmax_pg) { return NULL; }
 	for (uint64b i = 0; i <= (pmm_bitmax_pg - ip); i++) // j < (max - i + 1)
 	{
 		kstatus_t ok = 1;
@@ -362,11 +373,22 @@ struct process_struct
 	uint64b* p4_ptr;
 	kstatus_t status;
 	const char* pname;
-	uint64b rsp, rip, kstack;
+	uint64b rsp, rip, kstack, ursp;
 	// thu cua tien trinh...
-	struct messenge_struct mailbox; // Hom thu
-	kstatus_t has_mess;		// Da co thu chua
-	struct messenge_struct* msgbuf; // Ko dc! ...
+	struct messenge_struct msg_queue[IPC_QUEUE_MAX];
+	size_t msg_head;		// "Index" lay tin nhan ra (doc)
+	size_t msg_tail;		// "Index" lay tin nan vao (ghi)
+	size_t msg_count;		// SL.
+	struct messenge_struct* msgbuf;
+};
+struct driver_struct
+{
+	const char* 	name;
+	uint64b		owner_pid;
+	uint16b 	ioport_start;
+	uint16b 	ioport_end;
+	uint8b  	irq;
+	kstatus_t 	actived;
 };
 
 //B. Method && global::var
@@ -444,8 +466,9 @@ struct process_struct* process_init(const char* name, uint64b id, void* function
 	*(--rsp) = (uint64b)process_start_init;
 	for (int __ = 0; __ < 6; __++) { *(--rsp) = 0; }
 	p->rsp = (uint64b)(rsp);
-	p->has_mess = 0;
-	p->msgbuf = NULL;
+	p->msg_count = 0;
+	p->msg_head  = 0;
+	p->msg_tail  = 0;
 
 	return p;
 }
@@ -535,42 +558,72 @@ struct process_struct* process_getbyid(uint64b pid)
 kstatus_t sysipc_send(uint64b pid_dich, uint64b type, uint64b data1, uint64b data2) 
 {
 	struct process_struct* pdich = process_getbyid(pid_dich);
-	if (!pdich || pdich->has_mess) { return KSTATUS_ERR; }
-	pdich->mailbox.senderid = process_curr->pid,
-	pdich->mailbox.type 	= type,
-	pdich->mailbox.data1	= data1,
-	pdich->mailbox.data2	= data2,
-	pdich->has_mess		= 1;
-	if (pdich->status == PROCESS_RECV_BLOCKED) {
-		// ko dc luoi bieng
+	if (!pdich || pdich->msg_count >= IPC_QUEUE_MAX) { return KSTATUS_ERR; }
+
+	size_t tail = pdich->msg_tail;
+	pdich->msg_queue[tail].senderid	= process_curr->pid;
+	pdich->msg_queue[tail].type	= type;
+	pdich->msg_queue[tail].data1	= data1;
+	pdich->msg_queue[tail].data2	= data2;
+	pdich->msg_tail = (tail + 1) % IPC_QUEUE_MAX;
+	pdich->msg_count++;
+
+	if (pdich->status == PROCESS_RECV_BLOCKED)
+	{
 		pdich->status = PROCESS_READY;
+		struct process_struct* ptr = process_curr;
+		process_curr 	= pdich;
+		tss_var.rsp0 	= pdich->kstack;
+		syscall_kstack 	= pdich->kstack;
+		vmm_switch_space(pdich->p4_ptr);
+		process_switch(&(ptr->rsp), pdich->rsp);
 	}
 	return KSTATUS_OK;
 }
 kstatus_t sysipc_recv(struct messenge_struct* m)
 {
 	if (!m) { return KSTATUS_ERR; }
-	if (process_curr->has_mess)
+	if (process_curr->msg_count > 0)
 	{
-		m->senderid		= process_curr->mailbox.senderid;
-		m->type			= process_curr->mailbox.type;
-		m->data1		= process_curr->mailbox.data1;
-		m->data2		= process_curr->mailbox.data2;
-		process_curr->has_mess 	= 0;
+		size_t head = process_curr->msg_head;
+		*m = process_curr->msg_queue[head];
+		process_curr->msg_head = (head + 1) % IPC_QUEUE_MAX;
+		process_curr->msg_count--;
 	}
-	else {
+	else
+	{
 		process_curr->status = PROCESS_RECV_BLOCKED;
 		process_curr->msgbuf = m;
 		process_schrun();
-		if (process_curr->has_mess) 
+		if (process_curr->msg_count > 0)
 		{
-			m->senderid		= process_curr->mailbox.senderid;
-			m->type			= process_curr->mailbox.type;
-			m->data1		= process_curr->mailbox.data1;
-			m->data2		= process_curr->mailbox.data2;
-			process_curr->has_mess 	= 0;
+			size_t head = process_curr->msg_head;
+			struct messenge_struct p = process_curr->msg_queue[head];
+			m->senderid	= p.senderid;
+			m->type		= p.type;
+			m->data1	= p.data1;
+			m->data2	= p.data2;
+			process_curr->msg_head = (head + 1) % IPC_QUEUE_MAX;
+			process_curr->msg_count--;
 		}
 	}
+	return KSTATUS_OK;
+}
+
+struct driver_struct driver_table[DRIVER_MAXC];
+size_t driver_count = 0;
+kstatus_t driver_sub(
+	const char* name, uint64b id, uint16b start, uint16b end, uint8b irq) 
+{
+	if (driver_count >= DRIVER_MAXC) { return KSTATUS_ERR; }
+	struct driver_struct* ptr = &driver_table[driver_count++];
+	ptr->name 		= name;
+	ptr->owner_pid 		= id;
+	ptr->ioport_start 	= start;
+	ptr->ioport_end 	= end;
+	ptr->irq		= irq;
+	ptr->actived 		= 0;
+
 	return KSTATUS_OK;
 }
 
