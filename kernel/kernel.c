@@ -1,5 +1,6 @@
 #include "../include/kmanager.h"
 #include "../include/kdefine.h"
+#include "../include/filesystem.h"
 
 // IDT (in C/C++):
 struct idt_struct
@@ -312,7 +313,7 @@ void who(void)
 			"\tmov $1, %%rax\n"
 			"\tmov %0, %%rsi\n"
 			"\tint $0x80\n"
-			: : "r"("\"") : "rax", "rsi"
+			: : "r"("__rax__") : "rax", "rsi", "rcx", "r11"
 		);
 		// Syscall Strom = 0
 		for (int i = 0; i <= (900000ULL << 2); i++) { asm volatile("nop"); }

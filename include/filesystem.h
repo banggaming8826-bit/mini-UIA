@@ -6,7 +6,7 @@
 
 // A. AHCI/SATA
 
-struct hba_port
+struct hba_port 
 {
 	// "cuu toi voi!":)
 	uint32b clb,
@@ -55,15 +55,15 @@ struct ahci_prdt_element
 } __attribute__((packed));
 struct ahci_cmd_header
 {
-	uint8b cfl		: 5;
-	uint8b	  a		: 1,
-		  w		: 1,
-		  p		: 1,
-		  r		: 1,
-		  b		: 1,
-		  c		: 1,
-		  reserved0	: 1;
-	uint8b pmp		: 4;
+	uint8b 	cfl		: 5;
+	uint8b 	a		: 1,
+	       	w		: 1,
+		p		: 1,
+		r		: 1,
+		b		: 1,
+		c		: 1,
+		reserved0	: 1;
+	uint8b 	pmp		: 4;
 	uint16b prdtl;
 	uint32b prdbc,
 		ctba,
@@ -76,6 +76,15 @@ struct ahci_cmd_table
 	       acmd[16],
 	       reserved[48];
 	struct ahci_prdt_element prdt_entry[1];
+} __attribute__((packed));
+struct mbr_partition
+{
+	uint8b bootok, // 0x80 hay NULL?
+	       start_chs[3],
+	       os_type,
+	       end_chs  [3];
+	uint32b start_lba,
+		total_sector;
 } __attribute__((packed));
 
 void ahci_portinit(struct hba_port*, uint64b, uint64b, uint64b, uint64b);
@@ -96,6 +105,9 @@ uint64b fs_allocproc(uint64b vaddr)
 	);
 	return paddr;
 }
+
+// a. o dia
+
 void ahci_fport(struct hba_mem* mem) 
 {
 	uint32b pi = mem->pi;
@@ -208,4 +220,28 @@ kstatus_t ahci_read(struct hba_port* port, uint64b startlba, uint16b count, uint
 	return KSTATUS_OK;
 }
 
+// aw. phan vung
+
+kstatus_t partition_pmbr(
+		struct hba_port* port, uint64b clbva, uint64b ctbava,
+		struct mbr_partition* partret
+)
+{
+	if (!port) { return KSTATUS_ERR; }
+	void* sectbuf = pmm_bitalloc_pg();
+	if (!sectbuf) { return KSTATUS_ERR; }
+	kstatus_t readstatus = ahci_read(
+		port, 0, 1, 
+		(uint64b)sectbuf, clbva, ctbava
+	);
+	if (readstatus == KSTATUS_ERR) {
+		pmm_bitfree_pg(sectbuf);
+		return KSTATUS_ERR;
+	}
+	// thu thach ngan dong
+	uint8b* mbr_partb = (uint8b*)sectbuf;
+	struct mbr_partition* partition = (struct mbr_partition*)(&mbr_partb[446]);
+	for (int i = 0; i < 4; i++) { partret[i] = partition[i]; }
+	return pmm_bitfree_pg(sectbuf);
+} // parse
 #endif

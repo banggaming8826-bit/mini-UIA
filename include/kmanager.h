@@ -242,7 +242,7 @@ kstatus_t vmm_mappg(uint64b* p4_ptr, uint64b addr, uint64b paddr, uint64b f)
 		uint64b* muoi_diem = (uint64b*)pmm_bitalloc_pg();
 		for (int i = 0; i < 512; i++) { muoi_diem[i] = 0; }
 		p4_ptr[p4i] = ((uint64b)muoi_diem) 
-				| PAGE_PRESENT | PAGE_WRITE | f;
+				| PAGE_PRESENT | PAGE_WRITE | PAGE_USER;
 	}
 	uint64b* pdpt = (uint64b*)(p4_ptr[p4i] & PAGE_MASK);
 	if (!(pdpt[pdpti] & PAGE_PRESENT)) 
@@ -250,7 +250,7 @@ kstatus_t vmm_mappg(uint64b* p4_ptr, uint64b addr, uint64b paddr, uint64b f)
 		uint64b* tuyen_quang = (uint64b*)pmm_bitalloc_pg();
 		for (int i = 0; i < 512; i++) { tuyen_quang[i] = 0; }
 		pdpt[pdpti] = ((uint64b)tuyen_quang) 
-				| PAGE_PRESENT | PAGE_WRITE | f;
+				| PAGE_PRESENT | PAGE_WRITE | PAGE_USER;
 	}
 	uint64b* pd = (uint64b*)(pdpt[pdpti] & PAGE_MASK);
 	if (!(pd[pdi] & PAGE_PRESENT))
@@ -258,7 +258,7 @@ kstatus_t vmm_mappg(uint64b* p4_ptr, uint64b addr, uint64b paddr, uint64b f)
 		uint64b* thi_lai = (uint64b*)pmm_bitalloc_pg();
 		for (int i = 0; i < 512; i++) { thi_lai[i] = 0; }
 		pd[pdi] = ((uint64b)thi_lai) 
-				| PAGE_PRESENT | PAGE_WRITE | f;
+				| PAGE_PRESENT | PAGE_WRITE | PAGE_USER;
 	}
 	uint64b* pt = (uint64b*)(pd[pdi] & PAGE_MASK);
 	pt[pti] = (paddr & PAGE_MASK) | PAGE_PRESENT | PAGE_WRITE | f;
@@ -445,7 +445,8 @@ struct process_struct* process_init(const char* name, uint64b id, void* function
 
 	vmm_mappg(
 		p->p4_ptr, 
-		(uint64b)ustack, (uint64b)ustack, PAGE_USER
+		(uint64b)ustack, (uint64b)ustack, 
+		PAGE_PRESENT | PAGE_WRITE | PAGE_USER
 	);
 	uint64b fpage = (uint64b)function & PAGE_MASK;
 	vmm_mappg(p->p4_ptr, fpage, fpage, PAGE_USER);

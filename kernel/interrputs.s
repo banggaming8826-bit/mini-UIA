@@ -19,7 +19,7 @@ isr_divbyzero:
 	pop rdi;
 	pop rax;
 
-	hlt;
+	jmp hlt_loop;
 	iretq;
 
 ; GPT 
@@ -52,7 +52,7 @@ isr_gpf:
 	pop rbx;
 	add rsp, 8;
 
-	hlt;
+	jmp hlt_loop;
 	iretq;
 
 ; [deb] break point (bp)
@@ -122,7 +122,7 @@ isr_invalid_opcode:
 	pop rdi;
 	pop rax;
 
-	hlt;
+	jmp hlt_loop;
 	iretq;
 
 ; device not ava. (#nm)
@@ -142,7 +142,7 @@ isr_devnava:
 	pop rdi;
 	pop rax;
 
-	hlt;
+	jmp hlt_loop;
 	iretq;
 
 ; double fault
@@ -175,7 +175,7 @@ isr_doublefault:
 	pop rbx;
 	add rsp, 8;
 
-	hlt;
+	jmp hlt_loop;
 	iretq;
 
 ; invalid task state seg.
@@ -208,7 +208,7 @@ isr_whattss:
 	pop rbx;
 	add rsp, 8;
 
-	hlt;
+	jmp hlt_loop;
 	iretq;
 
 ; seg '!' present
@@ -241,7 +241,7 @@ isr_segnpre:
 	pop rbx;
 	add rsp, 8;
 
-	hlt;
+	jmp hlt_loop;
 	iretq;
 
 ; stack segment fault
@@ -274,7 +274,7 @@ isr_stackseg:
 	pop rbx;
 	add rsp, 8;
 	
-	hlt;
+	jmp hlt_loop;
 	iretq;
 	
 ; page fault fault
@@ -309,7 +309,7 @@ isr_pgfault:
 	pop rbx;
 	add rsp, 8;
 	
-	hlt;
+	jmp hlt_loop;
 	iretq;
 
 ; SYSCALL (128)
@@ -328,13 +328,13 @@ isr_syscall:
 	push r10;
 	push r11;
 
-	; ... ;
 	sub rsp, 8;
 	mov rdi, rax;
 	xor eax, eax;
 	call isr_syscall_xl;
 	add rsp, 8;
-	mov rdi, rax;
+
+	mov [rsp + 56], rax;
 
 	pop r11;
 	pop r10;
@@ -347,17 +347,20 @@ isr_syscall:
 	pop rsi;
 	pop rdi;
 
-	mov rax, rdi;
 	iretq;
 ; syscall
 ; FIXME []: the `syscall' command failed
-global isr_syscall_fs
+
+global isr_syscall_fs;
 extern process_curr;
 extern syscall_kstack;
+extern isr_syscall_xl;
 
 isr_syscall_fs:
-	xchg rsp, [rel syscall_kstack];
+	mov r12, rsp;
+	mov rsp, [rel syscall_kstack];
 
+	push r12;
 	push r11;
 	push rcx;
 	push rbp;
@@ -374,12 +377,11 @@ isr_syscall_fs:
 	push r9;
 	push r8;
 
-	sub rsp, 8;
 	mov rdi, rax;
 	mov rcx, r10;
 	xor eax, eax;
 	call isr_syscall_xl;
-	add rsp, 8;
+	mov [rsp + 24], rax;
 
 	pop r8;
 	pop r9;
@@ -396,10 +398,10 @@ isr_syscall_fs:
 	pop rbp;
 	pop rcx;
 	pop r11;
-	xchg rsp, [rel syscall_kstack];
+	pop r12;
 
+	mov rsp, r12;
 	sysretq;
-
 ; IRQ
 extern process_curr;
 extern process_schrun;
@@ -472,3 +474,10 @@ isr_keyboard:
 	pop rax;
 
 	iretq;
+
+; more
+
+hlt_loop:
+	cli;
+	hlt;
+	jmp hlt_loop;

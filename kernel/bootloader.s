@@ -10,7 +10,7 @@ start:
 
 	; cmm nha bios, luoi it thoi!
 	mov ah, 0x02;
-	mov al, 70;
+	mov al, 75;
 	mov ch, 0;
 	mov cl, 2;
 	mov dh, 0;
