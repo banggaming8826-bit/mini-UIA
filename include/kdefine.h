@@ -60,7 +60,6 @@ typedef __builtin_va_list 	va_list;
 #define LAPIC_TIMER_IC				0x0380
 #define LAPIC_TIMER_CC				0x0390
 #define LAPIC_TIMER_DC				0x03E0
-#define DRIVER_MAXC				64
 #define IPC_QUEUE_MAX				(24)
 
 // C. <filesystem.h>

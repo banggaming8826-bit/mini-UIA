@@ -348,60 +348,6 @@ isr_syscall:
 	pop rdi;
 
 	iretq;
-; syscall
-; FIXME []: the `syscall' command failed
-
-global isr_syscall_fs;
-extern process_curr;
-extern syscall_kstack;
-extern isr_syscall_xl;
-
-isr_syscall_fs:
-	mov r12, rsp;
-	mov rsp, [rel syscall_kstack];
-
-	push r12;
-	push r11;
-	push rcx;
-	push rbp;
-	push rbx;
-	push r12;
-	push r13;
-	push r14;
-	push r15;
-	push rdx;
-	push rsi;
-	push rdi;
-	push rax;
-	push r10;
-	push r9;
-	push r8;
-
-	mov rdi, rax;
-	mov rcx, r10;
-	xor eax, eax;
-	call isr_syscall_xl;
-	mov [rsp + 24], rax;
-
-	pop r8;
-	pop r9;
-	pop r10;
-	pop rax;
-	pop rdi;
-	pop rsi;
-	pop rdx;
-	pop r15;
-	pop r14;
-	pop r13;
-	pop r12;
-	pop rbx;
-	pop rbp;
-	pop rcx;
-	pop r11;
-	pop r12;
-
-	mov rsp, r12;
-	sysretq;
 ; IRQ
 extern process_curr;
 extern process_schrun;

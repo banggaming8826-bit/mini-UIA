@@ -6,7 +6,6 @@
 short* 	vga_buffer 		= (short*)0xB8000;
 int	vga_index  		= 0;
 uint64b total_byteram 		= 0;
-uint64b syscall_kstack;
 
 // "extern struct"
 struct tss_struct
@@ -485,7 +484,6 @@ kstatus_t process_run(struct process_struct* p)
 	if (!p) { return KSTATUS_ERR; }
 	process_curr = p;
 	tss_var.rsp0 = p->kstack;
-	syscall_kstack = p->kstack;
 
 	vmm_switch_space(p->p4_ptr);
 	uint64b rac;
@@ -542,15 +540,12 @@ void process_schrun(void)
 
 	process_currin = i;
 	process_curr = process_queue[process_currin];
-
 	tss_var.rsp0 = process_curr->kstack;
-	syscall_kstack = process_curr->kstack;
 
 	vmm_switch_space(process_curr->p4_ptr);
 	process_switch(&(ptr->rsp), process_curr->rsp);
 }
-struct process_struct* process_getbyid(uint64b pid) 
-{
+struct process_struct* process_getbyid(uint64b pid) {
 	for (size_t i = 0; i < process_num; i++) {
 		if (process_queue[i]->pid == pid) { return process_queue[i]; }
 	}
@@ -559,25 +554,71 @@ struct process_struct* process_getbyid(uint64b pid)
 kstatus_t sysipc_send(uint64b pid_dich, uint64b type, uint64b data1, uint64b data2) 
 {
 	struct process_struct* pdich = process_getbyid(pid_dich);
-	if (!pdich || pdich->msg_count >= IPC_QUEUE_MAX) { return KSTATUS_ERR; }
+	if (!pdich) { return KSTATUS_ERR; }
 
-	size_t tail = pdich->msg_tail;
-	pdich->msg_queue[tail].senderid	= process_curr->pid;
-	pdich->msg_queue[tail].type	= type;
-	pdich->msg_queue[tail].data1	= data1;
-	pdich->msg_queue[tail].data2	= data2;
-	pdich->msg_tail = (tail + 1) % IPC_QUEUE_MAX;
-	pdich->msg_count++;
-
-	if (pdich->status == PROCESS_RECV_BLOCKED)
+	if (data1 >= KERNEL_ADDR && data2 >= KERNEL_ADDR)
 	{
-		pdich->status = PROCESS_READY;
-		struct process_struct* ptr = process_curr;
-		process_curr 	= pdich;
-		tss_var.rsp0 	= pdich->kstack;
-		syscall_kstack 	= pdich->kstack;
+		uint64b p4i	= (data1 >> 39) & 0x1FF,
+			pdpti	= (data1 >> 30) & 0x1FF,
+			pdi	= (data1 >> 21) & 0x1FF,
+			pti	= (data1 >> 12) & 0x1FF;
+		if (process_curr->p4_ptr[p4i] & PAGE_PRESENT)
+		{
+			uint64b* pdpt = (uint64b*)(process_curr->p4_ptr[p4i] & PAGE_MASK);
+			if (pdpt[pdpti] & PAGE_PRESENT)
+			{
+				uint64b* pd = (uint64b*)(pdpt[pdpti] & PAGE_MASK);
+				if (pd[pdi] & PAGE_PRESENT)
+				{
+					uint64b* pt = (uint64b*)(pd[pdi] & PAGE_MASK);
+					if (pt[pti] & PAGE_PRESENT)
+					{
+						uint64b addr_thuc = pt[pti] & PAGE_MASK;
+						vmm_mappg(
+							pdich->p4_ptr,
+							data2, 
+							addr_thuc,
+							PAGE_PRESENT |
+							PAGE_WRITE	|
+							PAGE_USER
+						);
+						pt[pti] = 0;
+						asm volatile(
+							"invlpg (%0)" 
+							: : "r"(data1) : "memory"
+						);
+					}
+				}
+			}
+		}
+	}
+	if (pdich->status == PROCESS_RECV_BLOCKED && pdich->msgbuf)
+	{
 		vmm_switch_space(pdich->p4_ptr);
+		pdich->msgbuf->senderid	= process_curr->pid,
+		pdich->msgbuf->type	= type,
+		pdich->msgbuf->data1	= data1,
+		pdich->msgbuf->data2	= data2,
+		pdich->status		= PROCESS_READY,
+		pdich->msgbuf		= NULL;
+
+		struct process_struct* ptr 	= process_curr;
+		process_curr			= pdich,
+		tss_var.rsp0			= pdich->kstack,
 		process_switch(&(ptr->rsp), pdich->rsp);
+	}
+	else
+	{
+		if (pdich->msg_count >= IPC_QUEUE_MAX) { return KSTATUS_ERR; }
+		size_t tail = pdich->msg_tail;
+		pdich->msg_queue[tail].senderid		= process_curr->pid,
+		pdich->msg_queue[tail].type		= type,
+		pdich->msg_queue[tail].data1		= data1,
+		pdich->msg_queue[tail].data2		= data2;
+		tail					++;
+		if (tail >= IPC_QUEUE_MAX) { tail 	= 0; }
+		pdich->msg_tail				= tail,
+		pdich->msg_count			++;
 	}
 	return KSTATUS_OK;
 }
@@ -586,45 +627,18 @@ kstatus_t sysipc_recv(struct messenge_struct* m)
 	if (!m) { return KSTATUS_ERR; }
 	if (process_curr->msg_count > 0)
 	{
-		size_t head = process_curr->msg_head;
-		*m = process_curr->msg_queue[head];
-		process_curr->msg_head = (head + 1) % IPC_QUEUE_MAX;
-		process_curr->msg_count--;
+		size_t head 				= process_curr->msg_head;
+		*m 					= process_curr->msg_queue[head],
+		head					++;
+		if (head >= IPC_QUEUE_MAX) { head 	= 0; }
+		process_curr->msg_head			= head,
+		process_curr->msg_count			--;
 	}
-	else
-	{
-		process_curr->status = PROCESS_RECV_BLOCKED;
+	else {
+		process_curr->status = PROCESS_RECV_BLOCKED,
 		process_curr->msgbuf = m;
 		process_schrun();
-		if (process_curr->msg_count > 0)
-		{
-			size_t head = process_curr->msg_head;
-			struct messenge_struct p = process_curr->msg_queue[head];
-			m->senderid	= p.senderid;
-			m->type		= p.type;
-			m->data1	= p.data1;
-			m->data2	= p.data2;
-			process_curr->msg_head = (head + 1) % IPC_QUEUE_MAX;
-			process_curr->msg_count--;
-		}
 	}
-	return KSTATUS_OK;
-}
-
-struct driver_struct driver_table[DRIVER_MAXC];
-size_t driver_count = 0;
-kstatus_t driver_sub(
-	const char* name, uint64b id, uint16b start, uint16b end, uint8b irq) 
-{
-	if (driver_count >= DRIVER_MAXC) { return KSTATUS_ERR; }
-	struct driver_struct* ptr = &driver_table[driver_count++];
-	ptr->name 		= name;
-	ptr->owner_pid 		= id;
-	ptr->ioport_start 	= start;
-	ptr->ioport_end 	= end;
-	ptr->irq		= irq;
-	ptr->actived 		= 0;
-
 	return KSTATUS_OK;
 }
 

@@ -38,9 +38,6 @@ extern void isr_timer(void);
 extern void isr_keyboard(void);
 extern void isr_syscall(void);
 
-// b. isr...
-extern void isr_syscall_fs(void);
-
 void idt_setas(int i, uint64b handler, uint8b attr) 
 {
 	idt[i] = (struct idt_struct){ 
@@ -313,7 +310,7 @@ void who(void)
 			"\tmov $1, %%rax\n"
 			"\tmov %0, %%rsi\n"
 			"\tint $0x80\n"
-			: : "r"("__rax__") : "rax", "rsi", "rcx", "r11"
+			: : "r"("__rax__") : "rax", "rsi"
 		);
 		// Syscall Strom = 0
 		for (int i = 0; i <= (900000ULL << 2); i++) { asm volatile("nop"); }
@@ -370,13 +367,6 @@ extern void kmain(void)
 			krdlapic(LAPIC_SVR) | 0x100 | 0xFF);
 	kwrlapic(LAPIC_TPR, 0);
 	lapic_timer_init(10000000);
-
-	uint64b sys_efer = krdmsr(MSR_EFER) | 1;
-	kwrmsr(MSR_EFER, sys_efer);
-	uint64b sys_star = (0x10ULL << 48) | (0x08ULL << 32);
-	kwrmsr(MSR_STAR, sys_star);
-	kwrmsr(MSR_LSTAR, (uint64b)isr_syscall_fs);
-	kwrmsr(MSR_SFMASK, 0x200);
 
 	asm volatile("sti");
 	
